@@ -117,8 +117,8 @@ class NPC(arcade.Sprite):
 		"""
 		vec_x = char_pos_x - self.center_x
 		vec_y = char_pos_y - self.center_y
-		vec_norm = np.sqrt(vec_x**2 + vec_y**2)
-
+		vec_norm = np.sqrt(vec_x**2 + vec_y**2) + 0.0000001 # to ensure no divide by zero errors
+		
 		directions = [
 			((vec_x/vec_norm) * NPC_MOVEMENT_SPEED, (vec_y/vec_norm) * NPC_MOVEMENT_SPEED),
 			((vec_x/vec_norm) * NPC_MOVEMENT_SPEED, (vec_y/vec_norm) * NPC_MOVEMENT_SPEED),

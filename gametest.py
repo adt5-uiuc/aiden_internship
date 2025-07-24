@@ -12,53 +12,59 @@ CHARACTER_SCALING = 1
 DIRECTION_CHANGE_INTERVAL = 1.
 
 # How fast to move, and how fast to run the animation
-MOVEMENT_SPEED = 10
+MOVEMENT_SPEED = 4
 NPC_MOVEMENT_SPEED = 3
 UPDATES_PER_FRAME = 5
 
 # Constants used to track if the player is facing left or right
 RIGHT_FACING = 0
 LEFT_FACING = 1
+FRONT_FACING = 2
+BACK_FACING = 3
 
 
 class PlayerCharacter(arcade.Sprite):
-	def __init__(self, idle_texture_pair, walk_texture_pairs):
-		# Default to face-right
-		self.character_face_direction = RIGHT_FACING
+	def __init__(self, idle_texture_list, walk_texture_lists):
+		# Default to face-front
+		self.character_face_direction = FRONT_FACING
 		self.is_npc = False
 
 		# Used for flipping between image sequences
 		self.cur_texture = 0
-		self.idle_texture_pair = idle_texture_pair
-		self.walk_textures = walk_texture_pairs
+		self.idle_texture_list = idle_texture_list
+		self.walk_texture_lists = walk_texture_lists
 
 		# Adjust the collision box. Default includes too much empty space
 		# side-to-side. Box is centered at sprite center, (0, 0)
 		self.points = [[-22, -64], [22, -64], [22, 28], [-22, 28]]
 		# Set up parent class
-		super().__init__(self.idle_texture_pair[0], scale=CHARACTER_SCALING)
+		super().__init__(self.idle_texture_list[2], scale=CHARACTER_SCALING)
 
 
 	def update_animation(self, delta_time: float = 1 / 60):
 
 		# Figure out if we need to flip face left or right
-		if self.change_x < 0 and self.character_face_direction == RIGHT_FACING:
+		if self.change_x < 0 and self.character_face_direction != LEFT_FACING:
 			self.character_face_direction = LEFT_FACING
-		elif self.change_x > 0 and self.character_face_direction == LEFT_FACING:
+		elif self.change_x > 0 and self.character_face_direction != RIGHT_FACING:
 			self.character_face_direction = RIGHT_FACING
+		elif self.change_y < 0 and self.character_face_direction != FRONT_FACING:
+			self.character_face_direction = FRONT_FACING
+		elif self.change_y > 0 and self.character_face_direction != BACK_FACING:
+			self.character_face_direction = BACK_FACING
 
 		# Idle animation
 		if self.change_x == 0 and self.change_y == 0:
-			self.texture = self.idle_texture_pair[self.character_face_direction]
+			self.texture = self.idle_texture_list[self.character_face_direction]
 			return
 
 		# Walking animation
 		self.cur_texture += 1
-		if self.cur_texture > 7 * UPDATES_PER_FRAME:
+		if self.cur_texture  >= 4 * UPDATES_PER_FRAME:
 			self.cur_texture = 0
 		frame = self.cur_texture // UPDATES_PER_FRAME
 		direction = self.character_face_direction
-		self.texture = self.walk_textures[frame][direction]
+		self.texture = self.walk_texture_lists[direction][frame]
 
 
 class NPC(arcade.Sprite):
@@ -186,29 +192,37 @@ class GameView(arcade.View):
 			# ":resources:images/animated_characters/male_person/malePerson",
 			# ":resources:images/animated_characters/male_adventurer/maleAdventurer",
 			# ":resources:images/animated_characters/zombie/zombie",
-			":resources:images/animated_characters/robot/robot",
+			# ":resources:images/animated_characters/robot/robot",
+			"Sprites\\FactoryOwner"
 		]
 		chosen_character = random.choice(character_types)
 
 		npc_1 = ":resources:images/animated_characters/male_person/malePerson"
 
 
+		self.idle_texture_list = []
 		# Load textures for idle standing
-		idle_texture = arcade.load_texture(f"{chosen_character}_idle.png")
-		self.idle_texture_pair = idle_texture, idle_texture.flip_left_right()
+		for i in range(1,5):
+			idle_texture = arcade.load_texture(f"{chosen_character}_walk{i}1.png") # First frame of walk is same as idle character facing
+			self.idle_texture_list.append(idle_texture)
 
 
 		idle_texture_npc = arcade.load_texture(f"{npc_1}_idle.png")
 		self.idle_texture_pair_npc = idle_texture_npc, idle_texture_npc.flip_left_right()
 
 		# Load textures for walking
-		self.walk_texture_pairs = []
+		self.walk_textures_lists = []
 		self.walk_texture_pairs_npc = []
 
-		for i in range(8):
-			texture = arcade.load_texture(f"{chosen_character}_walk{i}.png")
-			self.walk_texture_pairs.append((texture, texture.flip_left_right()))
+		for i in range(1,5):
+			textures = []
+			for j in range(1,5):
+				texture = arcade.load_texture(f"{chosen_character}_walk{i}{j}.png")
+				textures.append(texture)
+			self.walk_textures_lists.append(textures)
 
+
+		for i in range(8):
 			texture_npc = arcade.load_texture(f"{npc_1}_walk{i}.png")
 			self.walk_texture_pairs_npc.append((texture_npc, texture_npc.flip_left_right()))
 
@@ -216,9 +230,9 @@ class GameView(arcade.View):
 		self.player_list = arcade.SpriteList()
 
 		# Set up the player
-		self.player = PlayerCharacter(self.idle_texture_pair, self.walk_texture_pairs)
+		self.player = PlayerCharacter(self.idle_texture_list, self.walk_textures_lists)
 		self.player.position = self.center
-		self.player.scale = 0.8
+		self.player.scale = 1.6
 
 		self.player_list.append(self.player)
 
@@ -252,13 +266,13 @@ class GameView(arcade.View):
 		"""
 		# Player controls for movement using arrow keys and WASD
 		if key in (arcade.key.UP, arcade.key.W):
-			self.player.change_y = MOVEMENT_SPEED
+			self.player.change_y += MOVEMENT_SPEED
 		elif key in (arcade.key.DOWN, arcade.key.S):
-			self.player.change_y = -MOVEMENT_SPEED
+			self.player.change_y += -MOVEMENT_SPEED
 		elif key in (arcade.key.LEFT, arcade.key.A):
-			self.player.change_x = -MOVEMENT_SPEED
+			self.player.change_x += -MOVEMENT_SPEED
 		elif key in (arcade.key.RIGHT, arcade.key.D):
-			self.player.change_x = MOVEMENT_SPEED
+			self.player.change_x += MOVEMENT_SPEED
 		# Quit
 		elif key in (arcade.key.ESCAPE, arcade.key.Q):
 			arcade.close_window()
@@ -267,10 +281,19 @@ class GameView(arcade.View):
 		"""
 		Called when the user releases a key.
 		"""
-		if key in (arcade.key.UP, arcade.key.DOWN, arcade.key.W, arcade.key.S):
+		"""if key in (arcade.key.UP, arcade.key.DOWN, arcade.key.W, arcade.key.S):
 			self.player.change_y = 0
 		elif key in (arcade.key.LEFT, arcade.key.RIGHT, arcade.key.A, arcade.key.D):
 			self.player.change_x = 0
+			"""
+		if key in (arcade.key.UP, arcade.key.W):
+			self.player.change_y -= MOVEMENT_SPEED
+		elif key in (arcade.key.DOWN, arcade.key.S):
+			self.player.change_y -= -MOVEMENT_SPEED
+		elif key in (arcade.key.LEFT, arcade.key.A):
+			self.player.change_x -= -MOVEMENT_SPEED
+		elif key in (arcade.key.RIGHT, arcade.key.D):
+			self.player.change_x -= MOVEMENT_SPEED
 
 	def on_update(self, delta_time):
 		""" Movement and game logic """

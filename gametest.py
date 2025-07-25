@@ -33,7 +33,8 @@ class PlayerCharacter(arcade.Sprite):
 		self.cur_texture = 0
 		self.idle_texture_list = idle_texture_list
 		self.walk_texture_lists = walk_texture_lists
-
+		self.x_count = 0
+		self.y_count = 0
 		# Adjust the collision box. Default includes too much empty space
 		# side-to-side. Box is centered at sprite center, (0, 0)
 		self.points = [[-22, -64], [22, -64], [22, 28], [-22, 28]]
@@ -266,16 +267,19 @@ class GameView(arcade.View):
 		"""
 		# Player controls for movement using arrow keys and WASD
 		if key in (arcade.key.UP, arcade.key.W):
-			self.player.change_y += MOVEMENT_SPEED
+			self.player.y_count += 1
 		elif key in (arcade.key.DOWN, arcade.key.S):
-			self.player.change_y += -MOVEMENT_SPEED
+			self.player.y_count -= 1
 		elif key in (arcade.key.LEFT, arcade.key.A):
-			self.player.change_x += -MOVEMENT_SPEED
+			self.player.x_count -= 1
 		elif key in (arcade.key.RIGHT, arcade.key.D):
-			self.player.change_x += MOVEMENT_SPEED
+			self.player.x_count += 1
 		# Quit
 		elif key in (arcade.key.ESCAPE, arcade.key.Q):
 			arcade.close_window()
+
+		self.player.change_x = MOVEMENT_SPEED * (max(min(self.player.x_count,1),-1))
+		self.player.change_y = MOVEMENT_SPEED * (max(min(self.player.y_count,1),-1))
 
 	def on_key_release(self, key, modifiers):
 		"""
@@ -287,13 +291,18 @@ class GameView(arcade.View):
 			self.player.change_x = 0
 			"""
 		if key in (arcade.key.UP, arcade.key.W):
-			self.player.change_y -= MOVEMENT_SPEED
+			self.player.y_count += -1
 		elif key in (arcade.key.DOWN, arcade.key.S):
-			self.player.change_y -= -MOVEMENT_SPEED
+			self.player.y_count -= -1
 		elif key in (arcade.key.LEFT, arcade.key.A):
-			self.player.change_x -= -MOVEMENT_SPEED
+			self.player.x_count -= -1
 		elif key in (arcade.key.RIGHT, arcade.key.D):
-			self.player.change_x -= MOVEMENT_SPEED
+			self.player.x_count += -1
+
+		
+		self.player.change_x = MOVEMENT_SPEED * (max(min(self.player.x_count,1),-1))
+		self.player.change_y = MOVEMENT_SPEED * (max(min(self.player.y_count,1),-1))
+
 
 	def on_update(self, delta_time):
 		""" Movement and game logic """

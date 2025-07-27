@@ -194,7 +194,8 @@ class GameView(arcade.View):
 			# ":resources:images/animated_characters/male_adventurer/maleAdventurer",
 			# ":resources:images/animated_characters/zombie/zombie",
 			# ":resources:images/animated_characters/robot/robot",
-			"Sprites\\FactoryOwner"
+			"./Sprites/FactoryOwner"
+			# "Sprites\\FactoryOwner"
 		]
 		chosen_character = random.choice(character_types)
 
@@ -265,6 +266,8 @@ class GameView(arcade.View):
 		"""
 		Called whenever a key is pressed.
 		"""
+
+		print(key)
 		# Player controls for movement using arrow keys and WASD
 		if key in (arcade.key.UP, arcade.key.W):
 			self.player.y_count += 1

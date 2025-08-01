@@ -14,13 +14,13 @@ prompt = """You are a journalist in this climate change museum, ask a question a
 """
 
 agent = LlmAgent(
-	model=LiteLlm(model="ollama_chat/mistral"),
+	model=LiteLlm(model="ollama_chat/deepseek-r1:latest"),
 	name="first_agent",
 	instruction="""From the input city, determine what country is it""",
 	description="""From the input city, determine what country is it""",
 )
 agent2 = LlmAgent(
-	model=LiteLlm(model="ollama_chat/mistral"),
+	model=LiteLlm(model="ollama_chat/deepseek-r1:latest"),
 	name="second_agent",
 	instruction=prompt,
 	description=prompt,
@@ -45,7 +45,7 @@ session = asyncio.run(session_service.create_session(
 runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
 
 events = runner.run(user_id=USER_ID, session_id=SESSION_ID,
-	new_message=types.Content(role="user", parts=[types.Part(text="Australia")])
+	new_message=types.Content(role="user", parts=[types.Part(text="Melbourne")])
 )
 
 for ev in events :

@@ -10,6 +10,7 @@ WINDOW_TITLE = "Eco-friendly Game"
 
 CHARACTER_SCALING = 1
 DIRECTION_CHANGE_INTERVAL = 1.
+OBJECT_SCALING = 2
 
 # How fast to move, and how fast to run the animation
 MOVEMENT_SPEED = 4
@@ -21,7 +22,6 @@ RIGHT_FACING = 0
 LEFT_FACING = 1
 FRONT_FACING = 2
 BACK_FACING = 3
-
 
 class PlayerCharacter(arcade.Sprite):
 	def __init__(self, idle_texture_list, walk_texture_lists):
@@ -45,14 +45,14 @@ class PlayerCharacter(arcade.Sprite):
 	def update_animation(self, delta_time: float = 1 / 60):
 
 		# Figure out if we need to flip face left or right
-		if self.change_x < 0 and self.character_face_direction != LEFT_FACING:
-			self.character_face_direction = LEFT_FACING
-		elif self.change_x > 0 and self.character_face_direction != RIGHT_FACING:
-			self.character_face_direction = RIGHT_FACING
-		elif self.change_y < 0 and self.character_face_direction != FRONT_FACING:
+		if self.change_y < 0:
 			self.character_face_direction = FRONT_FACING
-		elif self.change_y > 0 and self.character_face_direction != BACK_FACING:
+		elif self.change_y > 0:
 			self.character_face_direction = BACK_FACING
+		elif self.change_x < 0:
+			self.character_face_direction = LEFT_FACING
+		elif self.change_x > 0:
+			self.character_face_direction = RIGHT_FACING
 
 		# Idle animation
 		if self.change_x == 0 and self.change_y == 0:
@@ -65,7 +65,7 @@ class PlayerCharacter(arcade.Sprite):
 			self.cur_texture = 0
 		frame = self.cur_texture // UPDATES_PER_FRAME
 		direction = self.character_face_direction
-		self.texture = self.walk_texture_lists[direction][frame]
+		self.texture = self.walk_texture_lists[direction][frame] 
 
 
 class NPC(arcade.Sprite):
@@ -112,6 +112,7 @@ class NPC(arcade.Sprite):
 		# Update timer and change direction if needed
 		self.time_since_last_change += delta_time
 		if self.time_since_last_change >= DIRECTION_CHANGE_INTERVAL:
+
 
 			# self.set_random_direction()
 			self.follow_other_character(player_x, player_y)
@@ -168,6 +169,17 @@ class NPC(arcade.Sprite):
 		direction = self.character_face_direction
 		self.texture = self.walk_textures[frame][direction]
 
+class InteractableObject(arcade.Sprite):
+	def __init__(self, sprite_texture):
+		# Default to face-front
+		self.sprite_texture = sprite_texture
+		# Adjust the collision box. Default includes too much empty space
+		# side-to-side. Box is centered at sprite center, (0, 0)
+		self.points = [[-22, -64], [22, -64], [22, 28], [-22, 28]]
+		# Set up parent class
+		super().__init__(self.sprite_texture, scale=OBJECT_SCALING)
+
+
 
 class GameView(arcade.View):
 	""" Main application class. """
@@ -178,7 +190,7 @@ class GameView(arcade.View):
 
 		# Sprite lists
 		self.player_list = None
-
+		self.interactable_object_list = None
 		self.background = arcade.load_texture("bg.png")
 
 
@@ -194,7 +206,7 @@ class GameView(arcade.View):
 			# ":resources:images/animated_characters/male_adventurer/maleAdventurer",
 			# ":resources:images/animated_characters/zombie/zombie",
 			# ":resources:images/animated_characters/robot/robot",
-			"./Sprites/FactoryOwner"
+			"./Sprites/FactoryOwnerSprites/FactoryOwner"
 			# "Sprites\\FactoryOwner"
 		]
 		chosen_character = random.choice(character_types)
@@ -228,8 +240,12 @@ class GameView(arcade.View):
 			texture_npc = arcade.load_texture(f"{npc_1}_walk{i}.png")
 			self.walk_texture_pairs_npc.append((texture_npc, texture_npc.flip_left_right()))
 
+
+		self.wind_turbine_texture = arcade.load_texture("./Sprites/InteractableObjectSprites/WindTurbine.png")
+
 	def setup(self):
 		self.player_list = arcade.SpriteList()
+		self.interactable_object_list = arcade.SpriteList(use_spatial_hash=True)
 
 		# Set up the player
 		self.player = PlayerCharacter(self.idle_texture_list, self.walk_textures_lists)
@@ -245,6 +261,16 @@ class GameView(arcade.View):
 		self.npc_1.set_random_direction()
 
 		self.player_list.append(self.npc_1)
+		
+		self.wind_turbine = InteractableObject(self.wind_turbine_texture)
+		self.wind_turbine.position = (300,500)
+
+		self.interactable_object_list.append(self.wind_turbine)
+
+		
+		self.physics_engine = arcade.PhysicsEngineSimple(
+    		self.player, self.interactable_object_list
+		)
 
 	def on_draw(self):
 		"""
@@ -261,13 +287,12 @@ class GameView(arcade.View):
 
 		# Draw all the sprites.
 		self.player_list.draw()
+		self.interactable_object_list.draw()
 
 	def on_key_press(self, key, modifiers):
 		"""
 		Called whenever a key is pressed.
 		"""
-
-		print(key)
 		# Player controls for movement using arrow keys and WASD
 		if key in (arcade.key.UP, arcade.key.W):
 			self.player.y_count += 1
@@ -311,7 +336,7 @@ class GameView(arcade.View):
 		""" Movement and game logic """
 		player_coords = None
 		# Move the player
-		for pl in self.player_list.__iter__() :
+		for pl in self.player_list.__iter__():
 
 			if not pl.is_npc :
 				# this is player update, gather coords
@@ -322,6 +347,7 @@ class GameView(arcade.View):
 				pl.update(delta_time, player_coords[0], player_coords[1])
 			
 			pl.update_animation()
+		self.physics_engine.update()
 
 
 def main():

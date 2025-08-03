@@ -4,6 +4,19 @@ import arcade
 import random
 import numpy as np
 
+# ADK imports
+from ollama import chat, ChatResponse
+
+from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
+from google.adk.sessions import InMemorySessionService
+from google.adk.runners import Runner
+
+from google.genai import types
+
+import asyncio
+
+
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 WINDOW_TITLE = "Eco-friendly Game"
@@ -22,6 +35,12 @@ RIGHT_FACING = 0
 LEFT_FACING = 1
 FRONT_FACING = 2
 BACK_FACING = 3
+
+# Constants for ADK, may change later
+APP_NAME = "ecogame"
+USER_ID = "user"
+SESSION_ID="session"
+
 
 class PlayerCharacter(arcade.Sprite):
 	def __init__(self, idle_texture_list, walk_texture_lists):
@@ -69,23 +88,42 @@ class PlayerCharacter(arcade.Sprite):
 
 
 class NPC(arcade.Sprite):
-	def __init__(self, idle_texture_pair, walk_texture_pairs):
-		# Default to face-right
+	def __init__(self, idle_texture_list, walk_texture_lists, session_service):
+		# Default to face-front
+		self.character_face_direction = FRONT_FACING
 		self.is_npc = True
-		self.character_face_direction = RIGHT_FACING
 
-		# Used for flipping between image sequences
+		# Used for switching between images per frame
 		self.cur_texture = 0
-		self.idle_texture_pair = idle_texture_pair
-		self.walk_textures = walk_texture_pairs
-
+		self.idle_texture_list = idle_texture_list
+		self.walk_texture_lists = walk_texture_lists
+		self.x_count = 0
+		self.y_count = 0
 		# Adjust the collision box. Default includes too much empty space
 		# side-to-side. Box is centered at sprite center, (0, 0)
 		self.points = [[-22, -64], [22, -64], [22, 28], [-22, 28]]
 		# Set up parent class
-		super().__init__(self.idle_texture_pair[0], scale=CHARACTER_SCALING)
+		super().__init__(self.idle_texture_list[2], scale=CHARACTER_SCALING)
 
 		self.time_since_last_change = 0.0
+
+
+		self.session_service = session_service
+		self.agent = LlmAgent(
+			model=LiteLlm(model="ollama_chat/deepseek-r1:latest"),
+			name="first_agent",
+			instruction="""In one to two sentences explain the prompt""",
+			description="""In one to two sentences explain the prompt""",
+		)
+		self.runner = Runner(agent=self.agent, app_name=APP_NAME, session_service=self.session_service)
+
+		
+		"""self.events = self.runner.run(user_id=USER_ID, session_id=SESSION_ID,
+			new_message=types.Content(role="user", parts=[types.Part(text="Melbourne")])
+		)
+
+		for ev in self.events :
+			print(ev, flush=True)"""
 
 
 	def update(self, delta_time: float, player_x: float, player_y: float) :
@@ -151,26 +189,32 @@ class NPC(arcade.Sprite):
 	def update_animation(self, delta_time: float = 1 / 60):
 
 		# Figure out if we need to flip face left or right
-		if self.change_x < 0 and self.character_face_direction == RIGHT_FACING:
+		if self.change_y < 0:
+			self.character_face_direction = FRONT_FACING
+		elif self.change_y > 0:
+			self.character_face_direction = BACK_FACING
+		elif self.change_x < 0:
 			self.character_face_direction = LEFT_FACING
-		elif self.change_x > 0 and self.character_face_direction == LEFT_FACING:
+		elif self.change_x > 0:
 			self.character_face_direction = RIGHT_FACING
 
 		# Idle animation
 		if self.change_x == 0 and self.change_y == 0:
-			self.texture = self.idle_texture_pair[self.character_face_direction]
+			self.texture = self.idle_texture_list[self.character_face_direction]
 			return
 
 		# Walking animation
 		self.cur_texture += 1
-		if self.cur_texture > 7 * UPDATES_PER_FRAME:
+		if self.cur_texture  >= 4 * UPDATES_PER_FRAME:
 			self.cur_texture = 0
 		frame = self.cur_texture // UPDATES_PER_FRAME
 		direction = self.character_face_direction
-		self.texture = self.walk_textures[frame][direction]
+		self.texture = self.walk_texture_lists[direction][frame] 
+
+		
 
 class InteractableObject(arcade.Sprite):
-	def __init__(self, sprite_texture):
+	def __init__(self, sprite_texture, description):
 		# Default to face-front
 		self.sprite_texture = sprite_texture
 		# Adjust the collision box. Default includes too much empty space
@@ -178,6 +222,8 @@ class InteractableObject(arcade.Sprite):
 		self.points = [[-22, -64], [22, -64], [22, 28], [-22, 28]]
 		# Set up parent class
 		super().__init__(self.sprite_texture, scale=OBJECT_SCALING)
+
+		self.description = description
 
 
 
@@ -211,22 +257,23 @@ class GameView(arcade.View):
 		]
 		chosen_character = random.choice(character_types)
 
-		npc_1 = ":resources:images/animated_characters/male_person/malePerson"
+		npc_1 = "./Sprites/JournalistSprites/JournalistSpriteFemale"
 
 
 		self.idle_texture_list = []
+		self.idle_texture_list_npc = []
 		# Load textures for idle standing
 		for i in range(1,5):
 			idle_texture = arcade.load_texture(f"{chosen_character}_walk{i}1.png") # First frame of walk is same as idle character facing
 			self.idle_texture_list.append(idle_texture)
 
-
-		idle_texture_npc = arcade.load_texture(f"{npc_1}_idle.png")
-		self.idle_texture_pair_npc = idle_texture_npc, idle_texture_npc.flip_left_right()
+		for i in range(1,5):
+			idle_texture = arcade.load_texture(f"{npc_1}_walk{i}1.png") # First frame of walk is same as idle character facing
+			self.idle_texture_list_npc.append(idle_texture)
 
 		# Load textures for walking
 		self.walk_textures_lists = []
-		self.walk_texture_pairs_npc = []
+		self.walk_textures_lists_npc = []
 
 		for i in range(1,5):
 			textures = []
@@ -235,13 +282,25 @@ class GameView(arcade.View):
 				textures.append(texture)
 			self.walk_textures_lists.append(textures)
 
-
-		for i in range(8):
-			texture_npc = arcade.load_texture(f"{npc_1}_walk{i}.png")
-			self.walk_texture_pairs_npc.append((texture_npc, texture_npc.flip_left_right()))
-
+		
+		for i in range(1,5):
+			textures = []
+			for j in range(1,5):
+				texture = arcade.load_texture(f"{npc_1}_walk{i}{j}.png")
+				textures.append(texture)
+			self.walk_textures_lists_npc.append(textures)
 
 		self.wind_turbine_texture = arcade.load_texture("./Sprites/InteractableObjectSprites/WindTurbine.png")
+
+
+		# Setting up ADK
+		self.session_service = InMemorySessionService()
+		self.session = asyncio.run(self.session_service.create_session(
+			app_name=APP_NAME,
+			user_id=USER_ID,
+			session_id=SESSION_ID,
+			state={}
+		))
 
 	def setup(self):
 		self.player_list = arcade.SpriteList()
@@ -254,15 +313,15 @@ class GameView(arcade.View):
 
 		self.player_list.append(self.player)
 
-		self.npc_1 = NPC(self.idle_texture_pair_npc, self.walk_texture_pairs_npc)
+		self.npc_1 = NPC(self.idle_texture_list_npc, self.walk_textures_lists_npc, self.session_service)
 		self.npc_1.position = self.center
-		self.npc_1.scale = .8
+		self.npc_1.scale = 1.6
 
 		self.npc_1.set_random_direction()
 
 		self.player_list.append(self.npc_1)
 		
-		self.wind_turbine = InteractableObject(self.wind_turbine_texture)
+		self.wind_turbine = InteractableObject(self.wind_turbine_texture, "Wind turbine")
 		self.wind_turbine.position = (300,500)
 
 		self.interactable_object_list.append(self.wind_turbine)
@@ -271,6 +330,8 @@ class GameView(arcade.View):
 		self.physics_engine = arcade.PhysicsEngineSimple(
     		self.player, self.interactable_object_list
 		)
+
+		
 
 	def on_draw(self):
 		"""
